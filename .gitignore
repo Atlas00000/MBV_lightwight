@@ -6,6 +6,13 @@ m2/output/
 m2/output_test/
 m2/output_backtest*/
 m2/**/*.parquet
+
+# Milestone 3 baseline report (written next to --val parquet)
+**/m3_baseline_report.txt
+**/m3_threshold_sweep.csv
+**/m3_boosted_report.txt
+**/m3_artifacts_baseline/
+**/m3_artifacts_boosted/
 .venv/
 __pycache__/
 *.pyc

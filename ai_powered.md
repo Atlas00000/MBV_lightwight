@@ -145,6 +145,8 @@ Adjust calendar to your availability; order is fixed.
 
 **Definition of done:** Saved model artifact + training config YAML + evaluation notebook committed (repo of your choice).
 
+**Implementation (repo):** Python under `m3/` — `m3/README.md`. **`m3_train_baseline.py`**: logistic regression, optional sigmoid/isotonic calibration (`CalibratedClassifierCV`), metrics, gate PnL line, **`m3_threshold_sweep.csv`** (PF / max DD / counts vs threshold). **`m3_train_boosted.py`**: `HistGradientBoostingClassifier`, permutation importance, top-3 feature ablation. Shared **`m3_pipeline.py`** / **`m3_metrics.py`**.
+
 ---
 
 ## Milestone 4 — AI integration (after M3)
