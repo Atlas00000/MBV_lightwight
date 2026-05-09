@@ -2,6 +2,9 @@
 
 # Edge Discovery & Execution Engine Plan
 
+> **Implementation schedule (weekly phases, Milestone 1 = structured logging before AI):**  
+> see **`IMPLEMENTATION_PHASES.md`** in this folder. That file is the delivery roadmap; this `plan.md` remains the detailed strategy / variable specification.
+
 ## Converting Concepts Into Real Market Variables
 
 The objective of this phase is NOT:

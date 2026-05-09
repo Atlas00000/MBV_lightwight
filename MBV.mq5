@@ -1,12 +1,13 @@
 //+------------------------------------------------------------------+
 //|                                                          MBV.mq5 |
-//|  BB + RSI + ATR risk. v4.32: defaults = Profiles/Tester/           |
-//|  "MBV v4.31 PF.set" (validated wide backtest).                   |
+//|  BB + RSI + ATR risk. v4.35: snap on spread/cooldown + skip 14/3. |
+//|  v4.32 defaults = Profiles/Tester "MBV v4.31 PF.set".           |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "4.32"
+#property version   "4.35"
 
 #include <Trade/Trade.mqh>
+#include "MBV_Log.mqh"
 
 enum ENUM_TOUCH
   {
@@ -52,6 +53,11 @@ input double   InpRR=1.5;
 
 input double   InpLots=0.01;
 input int      InpSlippage=30;
+
+input bool     InpLogEnable=false;
+input bool     InpLogCommonFolder=false;
+input ENUM_MBV_LOG_MODE InpLogMode=MBV_LOG_RAW_OR_EXEC;
+input string   InpLogPrefix="MBV_sig_";
 
 CTrade g_trade;
 int      g_bb=-1;
@@ -166,65 +172,131 @@ bool LongRsiTurningUp()
 
 void TryTrade()
   {
-   if(Bars(_Symbol,InpTF)<InpBBPeriod+5) return;
+   MbvSnap S;
+   ZeroMemory(S);
+   S.bar_time=iTime(_Symbol,InpTF,1);
+   S.spread_pts=(int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
 
-   const int sp=(int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
-   if(InpMaxSpreadPoints>0 && sp>InpMaxSpreadPoints) return;
-
-   if(InpMinBarsSinceEntry>0 && g_lastTradeBars>0)
+   if(Bars(_Symbol,InpTF)<InpBBPeriod+5)
      {
-      const int b=Bars(_Symbol,InpTF);
-      if(b>0 && (b-g_lastTradeBars)<InpMinBarsSinceEntry) return;
+      MbvLogSignalRow(S,false,7,0,"NONE","");
+      return;
      }
 
-   double up=0,lo=0,rsi=0,atr=0;
-   if(!Buf(g_bb,1,1,up) || !Buf(g_bb,2,1,lo)) return;
-   if(!Buf(g_rsi,0,1,rsi) || !Buf(g_atr,0,1,atr) || atr<=0.0) return;
-
-   if(InpUseAdxFilter && g_adx>=0)
+   double up=0.0,mid=0.0,lo=0.0,rsi=0.0,atr=0.0,adx=0.0,pdi=0.0,mdi=0.0;
+   if(!Buf(g_bb,1,1,up) || !Buf(g_bb,0,1,mid) || !Buf(g_bb,2,1,lo))
      {
-      double adx=0.0;
-      if(!Buf(g_adx,0,1,adx)) return;
-      if(adx>InpMaxAdx) return;
+      MbvLogSignalRow(S,false,8,0,"NONE","");
+      return;
      }
+   if(!Buf(g_rsi,0,1,rsi) || !Buf(g_atr,0,1,atr) || atr<=0.0)
+     {
+      MbvLogSignalRow(S,false,8,0,"NONE","");
+      return;
+     }
+
+   S.o=iOpen(_Symbol,InpTF,1);
+   S.h=iHigh(_Symbol,InpTF,1);
+   S.l=iLow(_Symbol,InpTF,1);
+   S.c=iClose(_Symbol,InpTF,1);
+   S.bb_u=up;
+   S.bb_m=mid;
+   S.bb_l=lo;
+   S.rsi=rsi;
+   S.atr=atr;
+
+   if(g_adx>=0)
+     {
+      if(!Buf(g_adx,0,1,adx))
+        {
+         MbvLogSignalRow(S,false,8,0,"NONE","");
+         return;
+        }
+      Buf(g_adx,1,1,pdi);
+      Buf(g_adx,2,1,mdi);
+     }
+   S.adx=adx;
+   S.pdi=pdi;
+   S.mdi=mdi;
 
    double emaTr=0.0;
    double clsTr=0.0;
    if(InpUseTrendFilter && g_ma>=0)
      {
-      if(!Buf(g_ma,0,1,emaTr)) return;
+      if(!Buf(g_ma,0,1,emaTr))
+        {
+         MbvLogSignalRow(S,false,8,0,"NONE","");
+         return;
+        }
       double ct[];
       ArraySetAsSeries(ct,true);
-      if(CopyClose(_Symbol,InpTrendTF,1,1,ct)!=1) return;
+      if(CopyClose(_Symbol,InpTrendTF,1,1,ct)!=1)
+        {
+         MbvLogSignalRow(S,false,8,0,"NONE","");
+         return;
+        }
       clsTr=ct[0];
+     }
+   S.trend_ema=emaTr;
+   S.trend_c=clsTr;
+
+   S.spread_pts=(int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
+   if(InpMaxSpreadPoints>0 && S.spread_pts>InpMaxSpreadPoints)
+     {
+      MbvLogSignalRow(S,false,1,0,"NONE","");
+      return;
+     }
+   if(InpMinBarsSinceEntry>0 && g_lastTradeBars>0)
+     {
+      const int b=Bars(_Symbol,InpTF);
+      if(b>0 && (b-g_lastTradeBars)<InpMinBarsSinceEntry)
+        {
+         MbvLogSignalRow(S,false,4,0,"NONE","");
+         return;
+        }
+     }
+
+   if(InpUseAdxFilter && g_adx>=0 && adx>InpMaxAdx)
+     {
+      MbvLogSignalRow(S,false,2,0,"NONE","");
+      return;
+     }
+
+   if(S.c<=0.0)
+     {
+      MbvLogSignalRow(S,false,8,0,"NONE","");
+      return;
      }
 
    const double k=MathMax(0.0,InpNearBandATR);
    const double loTrig=lo+k*atr;
    const double upTrig=up-k*atr;
 
-   const double c=iClose(_Symbol,InpTF,1);
-   const double hi=iHigh(_Symbol,InpTF,1);
-   const double lw=iLow(_Symbol,InpTF,1);
-   if(c<=0.0) return;
-
-   bool touchBuy=(InpTouch==TOUCH_WICK) ? (lw<=loTrig) : (c<=loTrig);
-   bool touchSell=(InpTouch==TOUCH_WICK) ? (hi>=upTrig) : (c>=upTrig);
+   const bool touchBuy=(InpTouch==TOUCH_WICK) ? (S.l<=loTrig) : (S.c<=loTrig);
+   const bool touchSell=(InpTouch==TOUCH_WICK) ? (S.h>=upTrig) : (S.c>=upTrig);
+   S.touch_b=touchBuy?1:0;
+   S.touch_s=touchSell?1:0;
 
    const double buyRsiMax=(InpRequireRsi && InpLongStricterRsi) ? InpRsiBuyLongMax : InpRsiBuyBelow;
    const bool rsiBuy=!InpRequireRsi || (rsi<buyRsiMax);
    const bool rsiSell=!InpRequireRsi || (rsi>InpRsiSellAbove);
 
-   bool buy=touchBuy && rsiBuy;
-   bool sell=touchSell && rsiSell;
+   const int rawB=(touchBuy && rsiBuy)?1:0;
+   const int rawS=(touchSell && rsiSell)?1:0;
+   S.raw_b=rawB;
+   S.raw_s=rawS;
+
+   bool buy=(rawB!=0);
+   bool sell=(rawS!=0);
 
    if(buy && InpLongRequireRsiUp && !LongRsiTurningUp()) buy=false;
    if(buy && InpLongRequireBullBar)
      {
-      const double o1=iOpen(_Symbol,InpTF,1);
-      if(c<=o1) buy=false;
+      if(S.c<=S.o) buy=false;
      }
    if(buy && InpLongRequireDiPlus && !LongDiPlusDominant()) buy=false;
+   const bool buyAfterLong=buy;
+   const bool sellAfterLong=(rawS!=0);
 
    if(InpUseTrendFilter && g_ma>=0)
      {
@@ -232,12 +304,36 @@ void TryTrade()
       if(sell && !TrendAllowsSell(emaTr,clsTr)) sell=false;
      }
 
-   if(buy && sell) return;
-   if(!buy && !sell) return;
-   if(OpenCount()>=InpMaxPos) return;
+   S.fin_b=buy?1:0;
+   S.fin_s=sell?1:0;
+
+   if(buy && sell)
+     {
+      MbvLogSignalRow(S,false,6,0,"NONE","");
+      return;
+     }
+   if(!buy && !sell)
+     {
+      int sk=10;
+      const bool trendBlkBuy=(rawB!=0 && buyAfterLong && !buy);
+      const bool trendBlkSell=(rawS!=0 && sellAfterLong && !sell);
+      if(trendBlkBuy || trendBlkSell) sk=3;
+      else if(rawB!=0 && !buyAfterLong) sk=14;
+      MbvLogSignalRow(S,false,sk,0,"NONE","");
+      return;
+     }
+   if(OpenCount()>=InpMaxPos)
+     {
+      MbvLogSignalRow(S,false,5,0,"NONE","");
+      return;
+     }
 
    const double lots=LotNorm(InpLots);
-   if(lots<=0.0) return;
+   if(lots<=0.0)
+     {
+      MbvLogSignalRow(S,false,15,0,buy?"BUY":"SELL","");
+      return;
+     }
 
    const double slDist=InpSLAtrMult*atr;
    const double tpDist=slDist*InpRR;
@@ -253,14 +349,21 @@ void TryTrade()
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpSlippage);
-   const bool ok=isBuy?g_trade.Buy(lots,_Symbol,0.0,sl,tp,"MBV")
-                 :g_trade.Sell(lots,_Symbol,0.0,sl,tp,"MBV");
-   if(!ok) Print("MBV fail ",g_trade.ResultRetcode());
+
+   const string sid=MbvNextSignalId();
+   const string cmt=(StringLen(sid)>31 ? StringSubstr(sid,0,31) : sid);
+   const bool ok=isBuy?g_trade.Buy(lots,_Symbol,0.0,sl,tp,cmt)
+                 :g_trade.Sell(lots,_Symbol,0.0,sl,tp,cmt);
+   const int ret=(int)g_trade.ResultRetcode();
+   if(!ok) Print("MBV fail ",ret);
    else
      {
       g_lastTradeBars=Bars(_Symbol,InpTF);
-      Print("MBV ",isBuy?"BUY":"SELL"," RSI=",DoubleToString(rsi,1)," spread=",sp);
+      Print("MBV ",isBuy?"BUY":"SELL"," RSI=",DoubleToString(rsi,1)," spread=",S.spread_pts);
+      MbvTrackRegister(sid,g_trade.ResultDeal());
      }
+
+   MbvLogSignalRow(S,ok,ok?0:15,ok?0:ret,isBuy?"BUY":"SELL",sid);
   }
 
 int OnInit()
@@ -276,13 +379,16 @@ int OnInit()
    if(InpUseTrendFilter && g_ma<0) return(INIT_FAILED);
    if((InpUseAdxFilter || InpLongRequireDiPlus) && g_adx<0) return(INIT_FAILED);
    FillMode();
-   Print("MBV v4.32 locked | MR ",EnumToString(InpTF)," trend=",EnumToString(InpTrendTF)," EMA",InpTrendEMA,
-         " ADX<",InpMaxAdx," SLxATR=",InpSLAtrMult," RSI<",InpRsiBuyBelow,"/>",InpRsiSellAbove);
+   MbvLogInit(InpLogEnable,InpLogCommonFolder,InpLogMode,InpLogPrefix,"4.35",InpMagic,_Symbol,InpTF);
+   Print("MBV v4.35 | MR ",EnumToString(InpTF)," trend=",EnumToString(InpTrendTF)," EMA",InpTrendEMA,
+         " ADX<",InpMaxAdx," SLxATR=",InpSLAtrMult," RSI<",InpRsiBuyBelow,"/>",InpRsiSellAbove,
+         " log=",InpLogEnable);
    return(INIT_SUCCEEDED);
   }
 
 void OnDeinit(const int r)
   {
+   MbvLogDeinit();
    if(g_bb>=0) IndicatorRelease(g_bb);
    if(g_rsi>=0) IndicatorRelease(g_rsi);
    if(g_atr>=0) IndicatorRelease(g_atr);
@@ -292,6 +398,16 @@ void OnDeinit(const int r)
 
 void OnTick()
   {
+   MbvTrackOnTick();
    if(!NewBar()) return;
    TryTrade();
   }
+
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+  {
+   MbvOnTradeTransaction(trans,request,result);
+  }
+//+------------------------------------------------------------------+

@@ -53,6 +53,11 @@
       "path":"MQL5\\Include\\Trade\\DealInfo.mqh",
       "compile":false,
       "relative_to_project":false
+    },
+    {
+      "path":"MBV_Log.mqh",
+      "compile":false,
+      "relative_to_project":true
     }
   ]
 }
