@@ -129,6 +129,8 @@ Adjust calendar to your availability; order is fixed.
 
 **Definition of done:** `train.parquet` / `val.parquet` + one-page **Label spec** PDF or markdown.
 
+**Implementation (repo):** Python toolkit under `m2/` — run `m2/README.md` (`build_dataset.py` → `train.parquet` / `val.parquet` / `qc_report.txt`; labels in `m2/LABEL_SPEC.md`).
+
 ---
 
 ## Milestone 3 — Baseline models (after M2)
@@ -203,4 +205,4 @@ Pick **one** path first:
 | Companion | `ai_plan.md` (rationale), `EA- AI powered Design.md` (stack) |
 | MBV-Core reference | `MBV.mq5` — pin `#property version` in logs when M1 starts |
 
-When Milestone 1 is complete, add a line here: **M1 completed: `<date>` — schema version `v0.x` — sample artifact path.**
+**M1 completed:** 2026-05-09 — schema doc `MBV_signal_schema_v0.md` (v0.2) — sample logs `MetaQuotes/Terminal/Common/Files/MBV_sig_<Symbol>_*.csv` (EA v4.35+).

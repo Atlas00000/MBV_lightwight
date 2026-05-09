@@ -1,2 +1,11 @@
 *.ex5
 *.log
+
+# Milestone 2 Python (generated datasets & local runs)
+m2/output/
+m2/output_test/
+m2/output_backtest*/
+m2/**/*.parquet
+.venv/
+__pycache__/
+*.pyc
